@@ -1,4 +1,4 @@
-# 🛒 QuickBite - Aplicación de Delivery Express
+# 🛒 Danki - Aplicación de Delivery Express
 
 Aplicación de delivery tipo UberEats construida con Next.js 15, TypeScript, Tailwind CSS y Supabase.
 
