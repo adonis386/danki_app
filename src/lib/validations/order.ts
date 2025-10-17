@@ -22,9 +22,7 @@ export const createOrderSchema = z.object({
     .max(300, 'Las notas no pueden exceder 300 caracteres')
     .optional()
     .or(z.literal('')),
-  payment_method: z.enum(['cash', 'card'], {
-    required_error: 'El método de pago es requerido',
-  }),
+  payment_method: z.enum(['cash', 'card']),
   total: z.number().min(0.01, 'El total debe ser mayor a 0'),
   subtotal: z.number().min(0, 'El subtotal no puede ser negativo'),
   delivery_fee: z.number().min(0, 'La tarifa de delivery no puede ser negativa'),

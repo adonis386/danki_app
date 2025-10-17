@@ -19,20 +19,7 @@ export class ReviewService {
   async getReviews(filters?: ReviewFilters): Promise<Review[]> {
     let query = this.supabase
       .from('reseñas')
-      .select(`
-        *,
-        reseña_votos (
-          id,
-          user_id,
-          es_util
-        ),
-        reseña_respuestas (
-          id,
-          respuesta,
-          created_at,
-          updated_at
-        )
-      `)
+      .select('*')
       .order('fecha_resena', { ascending: false })
 
     if (filters) {
@@ -72,55 +59,22 @@ export class ReviewService {
       throw new Error(`Error al obtener reseñas: ${error.message}`)
     }
 
-    // Procesar votos
-    const userId = (await this.supabase.auth.getUser()).data.user?.id
-    
-    return data?.map(review => {
-      const votos = review.reseña_votos || []
-      const respuesta = review.reseña_respuestas?.[0] || null
-      
-      // Calcular estadísticas de votos
-      const totalUtil = votos.filter((v: any) => v.es_util).length
-      const totalNoUtil = votos.filter((v: any) => !v.es_util).length
-      
-      // Verificar voto del usuario actual
-      let miVoto = null
-      if (userId) {
-        const userVote = votos.find((v: any) => v.user_id === userId)
-        if (userVote) {
-          miVoto = userVote.es_util ? 'util' : 'no_util'
-        }
+    // Retornar datos sin relaciones anidadas
+    // Los votos y respuestas se cargarán por separado si son necesarios
+    return data?.map(review => ({
+      ...review,
+      votos: {
+        utiles: 0,
+        no_utiles: 0,
+        mi_voto: null
       }
-      
-      return {
-        ...review,
-        respuesta,
-        votos: {
-          utiles: totalUtil,
-          no_utiles: totalNoUtil,
-          mi_voto: miVoto
-        }
-      }
-    }) || []
+    })) || []
   }
 
   async getReviewById(id: string): Promise<Review> {
     const { data, error } = await this.supabase
       .from('reseñas')
-      .select(`
-        *,
-        reseña_votos (
-          id,
-          user_id,
-          es_util
-        ),
-        reseña_respuestas (
-          id,
-          respuesta,
-          created_at,
-          updated_at
-        )
-      `)
+      .select('*')
       .eq('id', id)
       .single()
 
@@ -128,30 +82,12 @@ export class ReviewService {
       throw new Error(`Error al obtener reseña: ${error.message}`)
     }
 
-    const userId = (await this.supabase.auth.getUser()).data.user?.id
-    const votos = data.reseña_votos || []
-    const respuesta = data.reseña_respuestas?.[0] || null
-    
-    // Calcular estadísticas de votos
-    const totalUtil = votos.filter((v: any) => v.es_util).length
-    const totalNoUtil = votos.filter((v: any) => !v.es_util).length
-    
-    // Verificar voto del usuario actual
-    let miVoto = null
-    if (userId) {
-      const userVote = votos.find((v: any) => v.user_id === userId)
-      if (userVote) {
-        miVoto = userVote.es_util ? 'util' : 'no_util'
-      }
-    }
-
     return {
       ...data,
-      respuesta,
       votos: {
-        utiles: totalUtil,
-        no_utiles: totalNoUtil,
-        mi_voto: miVoto
+        utiles: 0,
+        no_utiles: 0,
+        mi_voto: null
       }
     }
   }
@@ -211,7 +147,7 @@ export class ReviewService {
   async getReviewStats(tiendaId: string): Promise<ReviewStats> {
     const { data: reviews, error } = await this.supabase
       .from('reseñas')
-      .select('rating')
+      .select('id, rating')
       .eq('tienda_id', tiendaId)
 
     if (error) {

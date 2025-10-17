@@ -79,7 +79,12 @@ export class RoleService {
       return null
     }
 
-    return data?.roles || null
+    // Si data.roles es un array, tomamos el primer elemento, sino retornamos el objeto
+    const rolesData: any = data?.roles
+    if (rolesData) {
+      return Array.isArray(rolesData) ? rolesData[0] : rolesData
+    }
+    return null
   }
 
   // Asignar rol a usuario
@@ -129,7 +134,10 @@ export class RoleService {
       return false
     }
 
-    const permissions: string[] = data.roles.permissions || []
+    const rolesData: any = data.roles
+    const permissions: string[] = Array.isArray(rolesData) 
+      ? rolesData[0]?.permissions || []
+      : rolesData?.permissions || []
     return permissions.includes(permission)
   }
 
@@ -149,7 +157,10 @@ export class RoleService {
       return []
     }
 
-    return data.roles.permissions || []
+    const rolesData: any = data.roles
+    return Array.isArray(rolesData)
+      ? rolesData[0]?.permissions || []
+      : rolesData?.permissions || []
   }
 
   // Verificar si usuario es admin

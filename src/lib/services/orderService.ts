@@ -19,11 +19,6 @@ export class OrderService {
             tienda_id,
             tienda:tiendas(nombre)
           )
-        ),
-        user:auth.users(
-          id,
-          email,
-          user_metadata
         )
       `)
       .order('created_at', { ascending: false })
@@ -67,11 +62,6 @@ export class OrderService {
             tienda_id,
             tienda:tiendas(nombre)
           )
-        ),
-        user:auth.users(
-          id,
-          email,
-          user_metadata
         )
       `)
       .eq('id', id)
@@ -236,11 +226,6 @@ export class OrderService {
             tienda_id,
             tienda:tiendas(nombre)
           )
-        ),
-        user:auth.users(
-          id,
-          email,
-          user_metadata
         )
       `)
       .eq('items.product.tienda_id', storeId)
