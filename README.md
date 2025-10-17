@@ -2,7 +2,7 @@
 
 Aplicación de delivery tipo UberEats construida con Next.js 15, TypeScript, Tailwind CSS y Supabase.
 
-**QuickBite** - Tu delivery express de confianza. Rápido, fresco y seguro.
+**Danki** - Tu delivery express de confianza. Rápido, fresco y seguro.
 
 ## 🚀 Características
 
