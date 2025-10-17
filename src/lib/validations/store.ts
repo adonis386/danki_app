@@ -27,27 +27,21 @@ export const storeSchema = z.object({
   rating: z
     .number()
     .min(0, 'El rating no puede ser negativo')
-    .max(5, 'El rating no puede ser mayor a 5')
-    .default(0),
+    .max(5, 'El rating no puede ser mayor a 5'),
   num_resenas: z
     .number()
-    .min(0, 'El número de reseñas no puede ser negativo')
-    .default(0),
+    .min(0, 'El número de reseñas no puede ser negativo'),
   tiempo_entrega: z
     .number()
     .min(1, 'El tiempo de entrega debe ser al menos 1 minuto')
-    .max(180, 'El tiempo de entrega no puede exceder 180 minutos')
-    .default(30),
+    .max(180, 'El tiempo de entrega no puede exceder 180 minutos'),
   costo_envio: z
     .number()
-    .min(0, 'El costo de envío no puede ser negativo')
-    .default(0),
+    .min(0, 'El costo de envío no puede ser negativo'),
   certificado_calidad: z
-    .boolean()
-    .default(false),
+    .boolean(),
   activo: z
-    .boolean()
-    .default(true),
+    .boolean(),
 })
 
 export const storeUpdateSchema = storeSchema.partial()
