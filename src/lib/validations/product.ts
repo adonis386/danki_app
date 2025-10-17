@@ -23,14 +23,11 @@ export const productSchema = z.object({
   stock: z
     .number()
     .min(0, 'El stock no puede ser negativo')
-    .max(9999, 'El stock no puede exceder 9999')
-    .default(0),
+    .max(9999, 'El stock no puede exceder 9999'),
   activo: z
-    .boolean()
-    .default(true),
+    .boolean(),
   destacado: z
-    .boolean()
-    .default(false),
+    .boolean(),
   tienda_id: z
     .string()
     .min(1, 'La tienda es requerida'),
