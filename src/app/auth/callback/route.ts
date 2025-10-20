@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   const next = requestUrl.searchParams.get('next') ?? '/'
 
   if (code) {
-    const supabase = createClient()
+    const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     
     if (!error) {
@@ -19,4 +19,6 @@ export async function GET(request: Request) {
   // Si hay error o no hay code, redirigir al home
   return NextResponse.redirect(new URL('/', request.url))
 }
+
+
 

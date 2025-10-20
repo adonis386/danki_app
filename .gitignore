@@ -50,6 +50,10 @@ out
 # Archivos de configuración local de Supabase
 .supabase/
 
+# Scripts SQL (contienen estructura de base de datos)
+*.sql
+database-scripts/
+
 # ========================================
 # MISC
 # ========================================

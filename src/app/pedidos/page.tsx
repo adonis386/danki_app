@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Package, Clock, CheckCircle, XCircle, Truck, MapPin, Phone, CreditCard } from 'lucide-react'
+import { Package, Clock, CheckCircle, XCircle, Truck, MapPin, Phone, CreditCard, Navigation } from 'lucide-react'
+import Link from 'next/link'
 import { useUserOrders } from '@/hooks/useOrders'
 import { OrderStatus, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '@/types/order'
 import HomeButton from '@/components/HomeButton'
@@ -209,6 +210,19 @@ export default function PedidosPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Botón de Tracking */}
+                    {['confirmed', 'preparing', 'ready', 'out_for_delivery'].includes(order.status) && (
+                      <div className="mt-6">
+                        <Link
+                          href={`/pedidos/${order.id}/tracking`}
+                          className="flex items-center justify-center gap-2 w-full bg-orange-600 text-white font-semibold py-3 px-6 rounded-xl hover:bg-orange-700 transition-all shadow-lg hover:shadow-xl"
+                        >
+                          <Navigation size={20} />
+                          Ver Seguimiento en Tiempo Real
+                        </Link>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

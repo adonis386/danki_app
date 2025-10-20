@@ -131,6 +131,43 @@ export class OrderService {
       throw new Error(`Error al crear items del pedido: ${itemsError.message}`)
     }
 
+    // =============================================
+    // ASIGNACIÓN AUTOMÁTICA DE REPARTIDOR
+    // =============================================
+    try {
+      const { assignmentService } = await import('./assignmentService')
+      
+      // Intentar geocodificar la dirección
+      const coordenadas = await assignmentService.geocodificarDireccion(
+        orderData.delivery_address
+      )
+
+      // Asignar repartidor automáticamente
+      const asignacion = await assignmentService.asignarRepartidorAutomatico(
+        {
+          id: order.id,
+          delivery_address: orderData.delivery_address,
+          delivery_phone: orderData.delivery_phone,
+          coordenadas_destino: coordenadas || undefined,
+        },
+        {
+          distancia_maxima_km: 20,
+          calificacion_minima: 3.5,
+          priorizar_cercania: true,
+        }
+      )
+
+      if (asignacion) {
+        console.log('Repartidor asignado automáticamente:', asignacion.repartidor.nombre)
+      } else {
+        console.log('No se pudo asignar repartidor automáticamente')
+        // Notificar a admin o crear tracking manual
+      }
+    } catch (error) {
+      console.error('Error en asignación automática (no crítico):', error)
+      // No lanzar error, el pedido ya fue creado
+    }
+
     // Obtener el pedido completo con relaciones
     const completeOrder = await this.getOrderById(order.id)
     if (!completeOrder) {
