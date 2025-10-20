@@ -1,0 +1,21 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "regions": ["iad1"],
+  "rewrites": [
+    {
+      "source": "/admin/repartidores/:path*",
+      "destination": "/admin/repartidores/:path*"
+    },
+    {
+      "source": "/repartidor/:path*",
+      "destination": "/repartidor/:path*"
+    },
+    {
+      "source": "/pedidos/:id/tracking",
+      "destination": "/pedidos/:id/tracking"
+    }
+  ]
+}
+

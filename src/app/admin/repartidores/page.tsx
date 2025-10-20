@@ -36,7 +36,8 @@ export default function AdminRepartidoresPage() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/login')
+      // Comentado temporalmente para debugging en producción
+      // router.push('/login')
     }
   }, [user, authLoading, router])
 
