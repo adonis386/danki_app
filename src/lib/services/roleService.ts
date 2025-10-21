@@ -180,6 +180,74 @@ export class RoleService {
     const role = await this.getUserRole(userId)
     return role?.name === ROLES.CUSTOMER
   }
+
+  // Verificar si usuario es tienda
+  async isTienda(userId: string): Promise<boolean> {
+    const role = await this.getUserRole(userId)
+    return role?.name === ROLES.TIENDA
+  }
+
+  // Verificar si usuario es repartidor
+  async isRepartidor(userId: string): Promise<boolean> {
+    const role = await this.getUserRole(userId)
+    return role?.name === ROLES.REPARTIDOR
+  }
+
+  // Verificar si usuario es moderador
+  async isModerador(userId: string): Promise<boolean> {
+    const role = await this.getUserRole(userId)
+    return role?.name === ROLES.MODERADOR
+  }
+
+  // Verificar si usuario es cliente
+  async isCliente(userId: string): Promise<boolean> {
+    const role = await this.getUserRole(userId)
+    return role?.name === ROLES.CLIENTE
+  }
+
+  // Obtener tienda asociada al usuario
+  async getTiendaByUserId(userId: string): Promise<{ id: string; nombre: string } | null> {
+    const { data, error } = await this.supabase
+      .from('user_roles')
+      .select(`
+        tienda_id,
+        tiendas (
+          id,
+          nombre
+        )
+      `)
+      .eq('user_id', userId)
+      .single()
+
+    if (error || !data?.tiendas) {
+      return null
+    }
+
+    const tiendasData: any = data.tiendas
+    return Array.isArray(tiendasData) ? tiendasData[0] : tiendasData
+  }
+
+  // Obtener repartidor asociado al usuario
+  async getRepartidorByUserId(userId: string): Promise<{ id: string; nombre: string } | null> {
+    const { data, error } = await this.supabase
+      .from('user_roles')
+      .select(`
+        repartidor_id,
+        repartidores (
+          id,
+          nombre
+        )
+      `)
+      .eq('user_id', userId)
+      .single()
+
+    if (error || !data?.repartidores) {
+      return null
+    }
+
+    const repartidoresData: any = data.repartidores
+    return Array.isArray(repartidoresData) ? repartidoresData[0] : repartidoresData
+  }
 }
 
 // Instancia singleton del servicio

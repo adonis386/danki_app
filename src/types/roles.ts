@@ -24,12 +24,33 @@ export type Permission =
   | 'products:delete'
   | 'orders:read'
   | 'orders:write'
+  | 'orders:update'
+  | 'orders:create'
   | 'orders:delete'
+  | 'reviews:read'
+  | 'reviews:write'
+  | 'reviews:delete'
+  | 'tracking:read'
+  | 'tracking:write'
+  | 'location:write'
+  | 'profile:read'
+  | 'profile:write'
+  | 'users:read'
+  | 'users:write'
+  | 'users:delete'
+  | 'analytics:read'
+  | 'analytics:write'
+  | 'disputes:read'
+  | 'disputes:write'
 
 export const ROLES = {
   ADMIN: 'admin',
   STORE_OWNER: 'store_owner', 
-  CUSTOMER: 'customer'
+  CUSTOMER: 'customer',
+  CLIENTE: 'cliente',
+  TIENDA: 'tienda',
+  REPARTIDOR: 'repartidor',
+  MODERADOR: 'moderador'
 } as const
 
 export type RoleName = typeof ROLES[keyof typeof ROLES]

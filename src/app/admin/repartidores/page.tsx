@@ -18,6 +18,7 @@ import {
   ArrowLeft
 } from 'lucide-react'
 import { trackingService } from '@/lib/services/trackingService'
+import AdminBreadcrumb from '@/components/AdminBreadcrumb'
 import { assignmentService } from '@/lib/services/assignmentService'
 import type { Repartidor } from '@/types/tracking'
 import { useAuth } from '@/hooks/useAuth'
@@ -121,26 +122,24 @@ export default function AdminRepartidoresPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Breadcrumb */}
+      <div className="bg-white shadow">
+        <div className="mx-auto max-w-7xl px-4 py-4">
+          <AdminBreadcrumb currentPage="Gestión de Repartidores" />
+        </div>
+      </div>
+      
       {/* Header */}
       <div className="bg-white shadow">
         <div className="mx-auto max-w-7xl px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => router.push('/')}
-                className="rounded-lg p-2 hover:bg-gray-100"
-                title="Volver al inicio"
-              >
-                <ArrowLeft size={24} />
-              </button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Gestión de Repartidores
-                </h1>
-                <p className="text-sm text-gray-600">
-                  {repartidores.length} repartidores registrados
-                </p>
-              </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Gestión de Repartidores
+              </h1>
+              <p className="text-gray-600">
+                {repartidores.length} repartidores registrados
+              </p>
             </div>
             <button
               onClick={() => router.push('/admin/repartidores/nuevo')}
@@ -373,7 +372,7 @@ export default function AdminRepartidoresPage() {
                               router.push(`/admin/repartidores/${repartidor.id}/editar`)
                             }
                             className="rounded p-2 hover:bg-gray-100"
-                            title="Editar"
+                            title="Editar repartidor"
                           >
                             <Edit size={18} className="text-blue-600" />
                           </button>

@@ -230,7 +230,21 @@ class TrackingService {
         .limit(1)
         .single()
 
-      if (error) throw error
+      if (error) {
+        // Si no encuentra registros, no es un error crítico
+        if (error.code === 'PGRST116') {
+          console.log(`No se encontró asignación para el pedido ${pedidoId}`)
+          return null
+        }
+        throw error
+      }
+
+      // Verificar si data es válido y no está vacío
+      if (!data || Object.keys(data).length === 0) {
+        console.log(`Asignación vacía para el pedido ${pedidoId}`)
+        return null
+      }
+
       return data as AsignacionRepartidor
     } catch (error) {
       console.error('Error al obtener asignación:', error)
@@ -380,10 +394,15 @@ class TrackingService {
     try {
       // Obtener tracking
       const tracking = await this.getTrackingByPedido(pedidoId)
-      if (!tracking || tracking.length === 0) return null
-
+      
       // Obtener asignación
       const asignacion = await this.getAsignacionByPedido(pedidoId)
+
+      // Si no hay tracking ni asignación, devolver null
+      if ((!tracking || tracking.length === 0) && !asignacion) {
+        console.log(`No hay tracking ni asignación para el pedido ${pedidoId}`)
+        return null
+      }
 
       // Obtener repartidor si hay asignación
       let repartidor: Repartidor | undefined
@@ -396,10 +415,12 @@ class TrackingService {
       }
 
       // Crear timeline
-      const timeline = this.crearTimeline(tracking, asignacion)
+      const timeline = tracking ? this.crearTimeline(tracking, asignacion) : []
 
-      // Estado actual
-      const estadoActual = tracking[tracking.length - 1].estado
+      // Estado actual - usar el último tracking o el estado del pedido
+      const estadoActual = tracking && tracking.length > 0 
+        ? tracking[tracking.length - 1].estado 
+        : 'pendiente'
 
       return {
         pedido_id: pedidoId,

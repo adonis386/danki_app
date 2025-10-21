@@ -6,6 +6,7 @@ import { useStores } from '@/hooks/useStores'
 import { StoreFilters } from '@/types/store'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import StoreForm from '@/components/StoreForm'
+import AdminBreadcrumb from '@/components/AdminBreadcrumb'
 import { useNotification } from '@/hooks/useNotification'
 
 const categories = [
@@ -70,13 +71,16 @@ export default function AdminTiendasPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30">
-        <div className="container mx-auto px-6 py-12">
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Breadcrumb */}
+          <AdminBreadcrumb currentPage="Gestión de Tiendas" />
+          
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
             <div>
-              <h1 className="text-4xl font-black text-gray-900 mb-2">Gestión de Tiendas</h1>
-              <p className="text-lg text-gray-600">Administra todas las tiendas de la plataforma</p>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Gestión de Tiendas</h1>
+              <p className="text-gray-600">Administra todas las tiendas de la plataforma</p>
             </div>
             <button
               onClick={() => setShowForm(true)}

@@ -128,9 +128,12 @@ export default function PedidosPage() {
                           {getStatusIcon(order.status)}
                         </div>
                         <div>
-                          <h3 className="text-xl font-bold text-gray-900">
+                          <Link 
+                            href={`/pedidos/${order.id}/tracking`}
+                            className="text-xl font-bold text-gray-900 hover:text-indigo-600 transition-colors cursor-pointer"
+                          >
                             Pedido #{order.id.slice(-8).toUpperCase()}
-                          </h3>
+                          </Link>
                           <p className="text-gray-600">
                             {formatDate(order.created_at)}
                           </p>
@@ -211,18 +214,40 @@ export default function PedidosPage() {
                       </div>
                     </div>
 
-                    {/* Botón de Tracking */}
-                    {['confirmed', 'preparing', 'ready', 'out_for_delivery'].includes(order.status) && (
-                      <div className="mt-6">
+                    {/* Botones de Acción */}
+                    <div className="mt-6 flex flex-col sm:flex-row gap-3">
+                      {/* Botón de Tracking - Siempre visible para pedidos activos */}
+                      {order.status !== 'delivered' && order.status !== 'cancelled' && (
                         <Link
                           href={`/pedidos/${order.id}/tracking`}
-                          className="flex items-center justify-center gap-2 w-full bg-orange-600 text-white font-semibold py-3 px-6 rounded-xl hover:bg-orange-700 transition-all shadow-lg hover:shadow-xl"
+                          className="flex items-center justify-center gap-2 flex-1 bg-orange-600 text-white font-semibold py-3 px-6 rounded-xl hover:bg-orange-700 transition-all shadow-lg hover:shadow-xl"
                         >
                           <Navigation size={20} />
-                          Ver Seguimiento en Tiempo Real
+                          {order.status === 'pending' ? 'Ver Detalles del Pedido' : 'Ver Seguimiento en Tiempo Real'}
                         </Link>
-                      </div>
-                    )}
+                      )}
+                      
+                      {/* Botón de Reordenar - Solo para pedidos entregados */}
+                      {order.status === 'delivered' && (
+                        <Link
+                          href={`/tiendas/${order.items[0]?.product.tienda_id}`}
+                          className="flex items-center justify-center gap-2 flex-1 bg-green-600 text-white font-semibold py-3 px-6 rounded-xl hover:bg-green-700 transition-all shadow-lg hover:shadow-xl"
+                        >
+                          <Package size={20} />
+                          Volver a Pedir
+                        </Link>
+                      )}
+                      
+                      {/* Botón de Cancelar - Solo para pedidos pendientes */}
+                      {order.status === 'pending' && (
+                        <button
+                          className="flex items-center justify-center gap-2 flex-1 bg-red-600 text-white font-semibold py-3 px-6 rounded-xl hover:bg-red-700 transition-all shadow-lg hover:shadow-xl"
+                        >
+                          <XCircle size={20} />
+                          Cancelar Pedido
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
