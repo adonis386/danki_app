@@ -4,6 +4,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { CartProvider } from "@/contexts/CartContext";
 import NotificationContainer from "@/components/NotificationContainer";
+import ChatNotification from "@/components/ChatNotification";
 
 export const metadata: Metadata = {
   title: "Danki - Delivery Express",
@@ -23,6 +24,7 @@ export default function RootLayout({
             <CartProvider>
               {children}
               <NotificationContainer />
+              <ChatNotification />
             </CartProvider>
           </NotificationProvider>
         </AuthProvider>

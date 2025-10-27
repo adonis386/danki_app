@@ -79,6 +79,7 @@ export interface OrderFilters {
   date_from?: string
   date_to?: string
   search?: string
+  exclude_status?: OrderStatus[]
 }
 
 export interface OrderStats {

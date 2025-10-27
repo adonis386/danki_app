@@ -36,11 +36,21 @@ export class OrderService {
       if (filters.date_to) {
         query = query.lte('created_at', filters.date_to)
       }
+      if (filters.exclude_status && filters.exclude_status.length > 0) {
+        query = query.not('status', 'in', `(${filters.exclude_status.join(',')})`)
+      }
     }
 
     const { data, error } = await query
 
     if (error) {
+      console.error('❌ [OrderService] Error de Supabase:', error)
+      
+      // Si es un error de RLS, mostrar mensaje más claro
+      if (error.message && error.message.includes('infinite recursion')) {
+        throw new Error('Error de políticas RLS. Ejecuta database/fix_pedidos_rls_simple.sql')
+      }
+      
       throw new Error(`Error al obtener pedidos: ${error.message}`)
     }
 
@@ -137,6 +147,8 @@ export class OrderService {
     try {
       const { assignmentService } = await import('./assignmentService')
       
+      console.log('🚀 [OrderService] Iniciando asignación automática para pedido:', order.id)
+      
       // Intentar geocodificar la dirección
       const coordenadas = await assignmentService.geocodificarDireccion(
         orderData.delivery_address
@@ -158,13 +170,20 @@ export class OrderService {
       )
 
       if (asignacion) {
-        console.log('Repartidor asignado automáticamente:', asignacion.repartidor.nombre)
+        console.log('✅ [OrderService] Repartidor asignado automáticamente:', asignacion.repartidor.nombre)
       } else {
-        console.log('No se pudo asignar repartidor automáticamente')
+        console.log('⚠️ [OrderService] No se pudo asignar repartidor automáticamente')
         // Notificar a admin o crear tracking manual
       }
     } catch (error) {
-      console.error('Error en asignación automática (no crítico):', error)
+      console.error('❌ [OrderService] Error en asignación automática (no crítico):', error)
+      
+      // Si es un error de tabla faltante, mostrar mensaje más claro
+      if (error && typeof error === 'object' && 'message' in error && 
+          typeof error.message === 'string' && error.message.includes('no existe')) {
+        console.warn('⚠️ [OrderService] Tablas de tracking faltantes. Ejecuta los scripts SQL necesarios.')
+      }
+      
       // No lanzar error, el pedido ya fue creado
     }
 
@@ -179,32 +198,180 @@ export class OrderService {
 
   // Actualizar un pedido
   async updateOrder(id: string, orderData: UpdateOrderData): Promise<Order> {
-    const { data, error } = await this.supabase
-      .from('pedidos')
-      .update({
-        ...orderData,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .select()
-      .single()
+    try {
+      // Primero verificar que el pedido existe
+      const { data: existingOrder, error: checkError } = await this.supabase
+        .from('pedidos')
+        .select('id')
+        .eq('id', id)
+        .single()
 
-    if (error) {
-      throw new Error(`Error al actualizar pedido: ${error.message}`)
+      if (checkError || !existingOrder) {
+        throw new Error(`Pedido no encontrado: ${id}`)
+      }
+
+      // Actualizar el pedido
+      const { data, error } = await this.supabase
+        .from('pedidos')
+        .update({
+          ...orderData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) {
+        throw new Error(`Error al actualizar pedido: ${error.message}`)
+      }
+
+      if (!data) {
+        throw new Error('No se pudo actualizar el pedido')
+      }
+
+      // Obtener el pedido completo con relaciones
+      const completeOrder = await this.getOrderById(id)
+      if (!completeOrder) {
+        throw new Error('Error al obtener el pedido actualizado')
+      }
+
+      return completeOrder
+    } catch (error) {
+      console.error('Error en updateOrder:', error)
+      throw error
     }
-
-    // Obtener el pedido completo con relaciones
-    const completeOrder = await this.getOrderById(id)
-    if (!completeOrder) {
-      throw new Error('Error al obtener el pedido actualizado')
-    }
-
-    return completeOrder
   }
 
-  // Cancelar un pedido
+  // Cancelar un pedido (versión completamente independiente)
   async cancelOrder(id: string): Promise<Order> {
-    return this.updateOrder(id, { status: 'cancelled' })
+    try {
+      console.log('🚀 Iniciando cancelación del pedido:', id)
+      
+      // Paso 1: Verificar que el pedido existe
+      const { data: currentOrder, error: fetchError } = await this.supabase
+        .from('pedidos')
+        .select('id, status, user_id')
+        .eq('id', id)
+        .single()
+
+      if (fetchError) {
+        console.error('❌ Error al obtener pedido:', fetchError)
+        throw new Error(`Pedido no encontrado: ${fetchError.message}`)
+      }
+
+      if (!currentOrder) {
+        throw new Error('Pedido no encontrado')
+      }
+
+      console.log('✅ Pedido encontrado - Estado actual:', currentOrder.status)
+
+      // Paso 2: Validar que se puede cancelar
+      if (currentOrder.status === 'cancelled') {
+        throw new Error('El pedido ya está cancelado')
+      }
+
+      if (['delivered', 'out_for_delivery'].includes(currentOrder.status)) {
+        throw new Error('No se puede cancelar un pedido que ya está en camino o entregado')
+      }
+
+      console.log('✅ Validaciones pasadas - Procediendo con cancelación')
+
+      // Paso 3: Cancelar el pedido directamente
+      const { data: updatedOrder, error: updateError } = await this.supabase
+        .from('pedidos')
+        .update({ 
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select('id, status, user_id, total, created_at, updated_at')
+        .single()
+
+      if (updateError) {
+        console.error('❌ Error al actualizar pedido:', updateError)
+        throw new Error(`Error al cancelar el pedido: ${updateError.message}`)
+      }
+
+      if (!updatedOrder) {
+        throw new Error('No se pudo cancelar el pedido')
+      }
+
+      console.log('✅ Pedido cancelado exitosamente')
+
+      // Paso 4: Cancelar asignación de repartidor (opcional)
+      try {
+        const { error: assignmentError } = await this.supabase
+          .from('asignaciones_repartidor')
+          .update({ 
+            estado: 'cancelado',
+            updated_at: new Date().toISOString()
+          })
+          .eq('pedido_id', id)
+          .eq('estado', 'asignado')
+
+        if (assignmentError) {
+          console.warn('⚠️ No se pudo cancelar asignación:', assignmentError.message)
+        } else {
+          console.log('✅ Asignación de repartidor cancelada')
+        }
+      } catch (assignmentError) {
+        console.warn('⚠️ Error al cancelar asignación:', assignmentError)
+      }
+
+      // Paso 5: Actualizar tracking (opcional)
+      try {
+        const { error: trackingError } = await this.supabase
+          .from('tracking_pedido')
+          .insert({
+            pedido_id: id,
+            estado: 'cancelado',
+            mensaje: 'El pedido ha sido cancelado por el cliente',
+            timestamp: new Date().toISOString()
+          })
+
+        if (trackingError) {
+          console.warn('⚠️ No se pudo actualizar tracking:', trackingError.message)
+        } else {
+          console.log('✅ Tracking actualizado')
+        }
+      } catch (trackingError) {
+        console.warn('⚠️ Error al actualizar tracking:', trackingError)
+      }
+
+      // Paso 6: Intentar obtener pedido completo, pero no fallar si no se puede
+      try {
+        const completeOrder = await this.getOrderById(id)
+        if (completeOrder) {
+          console.log('✅ Pedido completo obtenido')
+          return completeOrder
+        }
+      } catch (getError) {
+        console.warn('⚠️ No se pudo obtener pedido completo:', getError)
+      }
+
+      // Paso 7: Devolver pedido básico si no se puede obtener el completo
+      console.log('✅ Devolviendo pedido básico')
+      return {
+        id: updatedOrder.id,
+        user_id: updatedOrder.user_id,
+        status: updatedOrder.status as any,
+        total: updatedOrder.total || 0,
+        subtotal: (updatedOrder as any).subtotal || updatedOrder.total || 0,
+        delivery_fee: (updatedOrder as any).delivery_fee || 0,
+        tax: (updatedOrder as any).tax || 0,
+        delivery_address: (updatedOrder as any).delivery_address || '',
+        delivery_phone: (updatedOrder as any).delivery_phone || '',
+        payment_method: 'cash',
+        estimated_delivery_time: (updatedOrder as any).estimated_delivery_time || 30,
+        items: [],
+        created_at: updatedOrder.created_at,
+        updated_at: updatedOrder.updated_at,
+      } as Order
+
+    } catch (error) {
+      console.error('❌ Error completo al cancelar pedido:', error)
+      throw error
+    }
   }
 
   // Actualizar estado del pedido

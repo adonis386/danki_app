@@ -13,9 +13,17 @@ import {
   AlertCircle,
   TrendingUp,
   Star,
-  ArrowLeft
+  ArrowLeft,
+  History,
+  MessageCircle,
+  XCircle
 } from 'lucide-react'
 import { trackingService } from '@/lib/services/trackingService'
+import { notificationService } from '@/lib/services/notificationService'
+import { pushNotificationService } from '@/lib/services/pushNotificationService'
+import { chatService } from '@/lib/services/chatService'
+import ChatComponent from '@/components/ChatComponent'
+import { useGPS } from '@/hooks/useGPS'
 import type { AsignacionRepartidor, Repartidor, EstadisticasRepartidor } from '@/types/tracking'
 
 export default function RepartidorDashboard() {
@@ -27,10 +35,42 @@ export default function RepartidorDashboard() {
   const [estadisticas, setEstadisticas] = useState<EstadisticasRepartidor | null>(null)
   const [disponible, setDisponible] = useState(false)
   const [actualizandoUbicacion, setActualizandoUbicacion] = useState(false)
+  const [showChat, setShowChat] = useState<string | null>(null)
+
+  // Hook GPS para actualización automática
+  const {
+    isTracking,
+    isAvailable: gpsAvailable,
+    currentLocation,
+    accuracy,
+    error: gpsError,
+    startTracking,
+    stopTracking,
+    requestPermission,
+  } = useGPS(repartidor?.id || null, {
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 0,
+    updateInterval: 30000, // 30 segundos
+  })
 
   useEffect(() => {
     verificarRepartidor()
+    initializePushNotifications()
   }, [])
+
+  const initializePushNotifications = async () => {
+    try {
+      const initialized = await pushNotificationService.initialize()
+      if (initialized) {
+        console.log('✅ Notificaciones push inicializadas correctamente')
+      } else {
+        console.warn('⚠️ No se pudieron inicializar las notificaciones push')
+      }
+    } catch (error) {
+      console.error('❌ Error al inicializar notificaciones push:', error)
+    }
+  }
 
   const verificarRepartidor = async () => {
     try {
@@ -124,11 +164,39 @@ export default function RepartidorDashboard() {
       setDisponible(nuevoEstado)
       
       if (nuevoEstado) {
-        // Iniciar actualización de ubicación
-        iniciarActualizacionUbicacion()
+        // Solicitar permisos de GPS y iniciar seguimiento
+        const hasPermission = await requestPermission()
+        if (hasPermission) {
+          await startTracking()
+          setActualizandoUbicacion(true)
+          
+          // Notificar al sistema
+          if (repartidor.user_id) {
+            await notificationService.notifyInApp(repartidor.user_id, {
+              title: '🚚 Disponible para entregas',
+              body: 'Tu ubicación se está actualizando automáticamente',
+              icon: '/icons/location.svg',
+              data: { tipo: 'disponibilidad_activada' },
+            }, 'success')
+          }
+        } else {
+          // Si no hay permisos, usar método manual
+          iniciarActualizacionUbicacion()
+        }
       } else {
-        // Detener actualización
+        // Detener seguimiento GPS
+        stopTracking()
         setActualizandoUbicacion(false)
+        
+        // Notificar al sistema
+        if (repartidor.user_id) {
+          await notificationService.notifyInApp(repartidor.user_id, {
+            title: '⏸️ No disponible',
+            body: 'Has desactivado tu disponibilidad',
+            icon: '/icons/pause.svg',
+            data: { tipo: 'disponibilidad_desactivada' },
+          }, 'info')
+        }
       }
     } catch (error) {
       console.error('Error al cambiar disponibilidad:', error)
@@ -183,6 +251,9 @@ export default function RepartidorDashboard() {
           estado: 'confirmado',
           mensaje: 'El repartidor aceptó tu pedido',
         })
+
+        // Notificar al cliente
+        await notificationService.notifyPedidoAsignado(asignacion.pedido_id, repartidor?.id || '')
       }
       
       // Recargar asignaciones
@@ -259,6 +330,14 @@ export default function RepartidorDashboard() {
               >
                 <ArrowLeft size={24} />
               </button>
+              <button
+                onClick={() => router.push('/repartidor/historial')}
+                className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700"
+                title="Ver historial de entregas"
+              >
+                <History size={16} />
+                Historial
+              </button>
               {repartidor.foto_url ? (
                 <img
                   src={repartidor.foto_url}
@@ -283,26 +362,56 @@ export default function RepartidorDashboard() {
             </div>
 
             {/* Toggle Disponibilidad */}
-            <button
-              onClick={toggleDisponibilidad}
-              className={`flex items-center gap-2 rounded-lg px-6 py-3 font-medium transition-colors ${
-                disponible
-                  ? 'bg-green-600 text-white hover:bg-green-700'
-                  : 'bg-gray-600 text-white hover:bg-gray-700'
-              }`}
-            >
-              {disponible ? (
-                <>
-                  <CheckCircle size={20} />
-                  Disponible
-                </>
-              ) : (
-                <>
-                  <AlertCircle size={20} />
-                  No Disponible
-                </>
+            <div className="flex items-center gap-3">
+              {/* Estado GPS */}
+              {disponible && (
+                <div className="flex items-center gap-2 text-sm">
+                  {isTracking ? (
+                    <div className="flex items-center gap-1 text-green-600">
+                      <div className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+                      <span>GPS Activo</span>
+                    </div>
+                  ) : gpsError ? (
+                    <div className="flex items-center gap-1 text-red-600">
+                      <AlertCircle size={16} />
+                      <span>GPS Error</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 text-yellow-600">
+                      <Clock size={16} />
+                      <span>GPS Manual</span>
+                    </div>
+                  )}
+                  
+                  {currentLocation && (
+                    <span className="text-gray-500">
+                      Precisión: {accuracy ? `${Math.round(accuracy)}m` : 'N/A'}
+                    </span>
+                  )}
+                </div>
               )}
-            </button>
+
+              <button
+                onClick={toggleDisponibilidad}
+                className={`flex items-center gap-2 rounded-lg px-6 py-3 font-medium transition-colors ${
+                  disponible
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-gray-600 text-white hover:bg-gray-700'
+                }`}
+              >
+                {disponible ? (
+                  <>
+                    <CheckCircle size={20} />
+                    Disponible
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle size={20} />
+                    No Disponible
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -448,6 +557,14 @@ export default function RepartidorDashboard() {
                       )}
 
                       <button
+                        onClick={() => setShowChat(asignacion.pedido_id)}
+                        className="flex items-center gap-2 rounded-lg border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+                      >
+                        <MessageCircle size={16} />
+                        Chat
+                      </button>
+
+                      <button
                         onClick={() => router.push(`/pedidos/${asignacion.pedido_id}/tracking`)}
                         className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                       >
@@ -461,6 +578,33 @@ export default function RepartidorDashboard() {
           )}
         </div>
       </div>
+
+      {/* Modal de Chat */}
+      {showChat && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Chat con Cliente
+                </h3>
+                <button
+                  onClick={() => setShowChat(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XCircle size={24} />
+                </button>
+              </div>
+              
+              <ChatComponent
+                conversacionId={showChat}
+                pedidoId={showChat}
+                className="h-96"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

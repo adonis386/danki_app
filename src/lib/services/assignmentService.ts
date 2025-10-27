@@ -49,17 +49,29 @@ class AssignmentService {
       if (pedido.coordenadas_destino) {
         const repartidoresConDistancia = await Promise.all(
           repartidoresDisponibles.map(async (repartidor) => {
-            const ubicacion = await trackingService.getUltimaUbicacion(repartidor.id)
-            
-            let distancia = Infinity
-            if (ubicacion && pedido.coordenadas_destino) {
-              distancia = trackingService.calcularDistancia(
-                { lat: ubicacion.latitud, lng: ubicacion.longitud },
-                pedido.coordenadas_destino
-              )
-            }
+            try {
+              const ubicacion = await trackingService.getUltimaUbicacion(repartidor.id)
+              
+              let distancia = Infinity
+              if (ubicacion && pedido.coordenadas_destino) {
+                distancia = trackingService.calcularDistancia(
+                  { lat: ubicacion.latitud, lng: ubicacion.longitud },
+                  pedido.coordenadas_destino
+                )
+              } else {
+                // Si no hay ubicación GPS, usar distancia por defecto basada en calificación
+                distancia = 10 + (5 - repartidor.calificacion) // Mejor calificación = menor distancia
+              }
 
-            return { repartidor, distancia }
+              return { repartidor, distancia }
+            } catch (error) {
+              console.warn(`Error al obtener ubicación para repartidor ${repartidor.id}:`, error)
+              // En caso de error, asignar distancia por defecto
+              return { 
+                repartidor, 
+                distancia: 15 + (5 - repartidor.calificacion) 
+              }
+            }
           })
         )
 
@@ -69,7 +81,31 @@ class AssignmentService {
         )
 
         if (repartidoresCercanos.length === 0) {
-          console.log('No hay repartidores cerca del destino')
+          console.log('No hay repartidores cerca del destino, asignando por calificación')
+          // Si no hay repartidores cercanos, asignar por calificación
+          const mejorPorCalificacion = repartidoresDisponibles.reduce(
+            (mejor, actual) => actual.calificacion > mejor.calificacion ? actual : mejor
+          )
+          
+          if (mejorPorCalificacion) {
+            const tiempoEstimado = trackingService.calcularTiempoEstimado(20) // Distancia estimada
+            
+            await trackingService.asignarRepartidor(pedido.id, mejorPorCalificacion.id)
+            await trackingService.createTracking({
+              pedido_id: pedido.id,
+              estado: 'confirmado',
+              mensaje: 'Repartidor asignado por calificación',
+              tiempo_estimado_minutos: tiempoEstimado,
+              distancia_restante_km: 20,
+            })
+
+            return {
+              repartidor: mejorPorCalificacion,
+              distancia_km: 20,
+              tiempo_estimado: tiempoEstimado,
+            }
+          }
+          
           return null
         }
 
@@ -96,6 +132,7 @@ class AssignmentService {
             distancia_restante_km: mejorRepartidor.distancia,
           })
 
+          console.log('✅ [AssignmentService] Repartidor asignado exitosamente:', mejorRepartidor.repartidor.nombre)
           return {
             repartidor: mejorRepartidor.repartidor,
             distancia_km: mejorRepartidor.distancia,

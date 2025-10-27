@@ -1,17 +1,43 @@
 'use client'
 
-import { useState } from 'react'
-import { Package, Clock, CheckCircle, XCircle, Truck, MapPin, Phone, CreditCard, Navigation } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Package, Clock, CheckCircle, XCircle, Truck, MapPin, Phone, CreditCard, Navigation, AlertTriangle, Star, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
-import { useUserOrders } from '@/hooks/useOrders'
+import { useUserOrders } from '@/hooks/useOrdersSimple'
 import { OrderStatus, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '@/types/order'
 import HomeButton from '@/components/HomeButton'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Header from '@/components/Header'
+import { useConfirmDialog } from '@/components/ConfirmDialog'
+import { useToast } from '@/components/Toast'
+import { createClient } from '@/lib/supabase/client'
+import { OrderDeleteServiceLocal } from '@/lib/services/orderDeleteServiceLocal'
+import SistemaCalificaciones from '@/components/SistemaCalificaciones'
+import ChatComponent from '@/components/ChatComponent'
+import { chatService } from '@/lib/services/chatService'
 
 export default function PedidosPage() {
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | 'all'>('all')
-  const { orders, loading, error } = useUserOrders()
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null)
+  const [showCalificacion, setShowCalificacion] = useState<string | null>(null)
+  const [showChat, setShowChat] = useState<string | null>(null)
+  const { orders: initialOrders, loading, error, refetch, forceRefetch } = useUserOrders()
+  const [orders, setOrders] = useState(initialOrders)
+  const { showConfirm, hideConfirm, ConfirmDialogComponent } = useConfirmDialog()
+  const { showToast, ToastContainer } = useToast()
+  const supabase = createClient()
+
+  // Sincronizar orders cuando cambien y filtrar eliminados localmente
+  useEffect(() => {
+    const deletedOrders = OrderDeleteServiceLocal.getDeletedOrders()
+    const filteredOrders = initialOrders.filter(order => !deletedOrders.includes(order.id))
+    setOrders(filteredOrders)
+    console.log('🔍 [PedidosPage] Pedidos filtrados:', {
+      total: initialOrders.length,
+      eliminados: deletedOrders.length,
+      mostrados: filteredOrders.length
+    })
+  }, [initialOrders])
 
   const filteredOrders = selectedStatus === 'all' 
     ? orders 
@@ -44,6 +70,110 @@ export default function PedidosPage() {
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+    })
+  }
+
+  const handleCancelOrder = async (orderId: string) => {
+    showConfirm({
+      title: 'Cancelar Pedido',
+      message: '¿Estás seguro de que quieres cancelar este pedido?\n\n⚠️ Esta acción no se puede deshacer.\nSi el pedido ya está siendo preparado, podrías incurrir en cargos.',
+      confirmText: 'Sí, Cancelar',
+      cancelText: 'No, Mantener',
+      type: 'danger',
+      isLoading: cancellingOrderId === orderId,
+      onConfirm: async () => {
+        try {
+          setCancellingOrderId(orderId)
+          
+          console.log('🚀 [PedidosPage] Cancelación directa:', orderId)
+          
+          // Cancelación directa con Supabase - sin servicios intermedios
+          const { error: updateError } = await supabase
+            .from('pedidos')
+            .update({ 
+              status: 'cancelled',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', orderId)
+
+          if (updateError) {
+            console.error('❌ [PedidosPage] Error en UPDATE:', updateError)
+            showToast(`❌ Error al cancelar: ${updateError.message}`, 'error')
+          } else {
+            console.log('✅ [PedidosPage] UPDATE exitoso, actualizando UI...')
+            
+            // Actualizar el estado local inmediatamente
+            const updatedOrders = orders.map(order => 
+              order.id === orderId 
+                ? { ...order, status: 'cancelled' as any, updated_at: new Date().toISOString() }
+                : order
+            )
+            
+            // Forzar re-render con el estado actualizado
+            setOrders(updatedOrders)
+            
+            // Mostrar mensaje de éxito
+            showToast('✅ Pedido cancelado exitosamente', 'success')
+            console.log('✅ [PedidosPage] UI actualizada y toast mostrado')
+            
+            // NO hacer refetch - mantener el estado local actualizado
+            console.log('ℹ️ [PedidosPage] Manteniendo estado local sin refetch')
+          }
+          
+        } catch (error) {
+          console.error('❌ [PedidosPage] Error inesperado:', error)
+          showToast('❌ Error inesperado al cancelar el pedido', 'error')
+        } finally {
+          setCancellingOrderId(null)
+          hideConfirm() // Cerrar el diálogo después de la operación
+        }
+      }
+    })
+  }
+
+  const handleDeleteOrder = async (orderId: string) => {
+    showConfirm({
+      title: 'Eliminar Pedido',
+      message: '¿Estás seguro de que quieres eliminar este pedido?\n\n⚠️ Esta acción lo ocultará de tu lista de pedidos.\nEl pedido permanecerá en el sistema pero no será visible para ti.',
+      confirmText: 'Sí, Eliminar',
+      cancelText: 'No, Mantener',
+      type: 'danger',
+      isLoading: cancellingOrderId === orderId,
+      onConfirm: async () => {
+        try {
+          setCancellingOrderId(orderId)
+          
+          console.log('🚀 [PedidosPage] Eliminación con servicio mejorado:', orderId)
+          
+          // Usar el servicio local de eliminación
+          const result = await OrderDeleteServiceLocal.deleteOrder(orderId)
+          
+          if (result.success) {
+            console.log('✅ [PedidosPage] Eliminación local exitosa')
+            
+            // Marcar como eliminado localmente
+            OrderDeleteServiceLocal.markAsDeleted(orderId)
+            
+            // Remover el pedido del estado local
+            const updatedOrders = orders.filter(order => order.id !== orderId)
+            setOrders(updatedOrders)
+            
+            // Mostrar mensaje de éxito
+            showToast('✅ Pedido eliminado exitosamente', 'success')
+            console.log('✅ [PedidosPage] Pedido eliminado de la UI (eliminación local)')
+          } else {
+            console.error('❌ [PedidosPage] Error en eliminación local:', result.error)
+            showToast(`❌ ${result.error}`, 'error')
+          }
+          
+        } catch (error) {
+          console.error('❌ [PedidosPage] Error inesperado:', error)
+          showToast('❌ Error inesperado al eliminar el pedido', 'error')
+        } finally {
+          setCancellingOrderId(null)
+          hideConfirm() // Cerrar el diálogo después de la operación
+        }
+      }
     })
   }
 
@@ -238,15 +368,66 @@ export default function PedidosPage() {
                         </Link>
                       )}
                       
-                      {/* Botón de Cancelar - Solo para pedidos pendientes */}
-                      {order.status === 'pending' && (
+                      {/* Botón de Chat - Para pedidos con repartidor asignado */}
+                      {(order.status === 'confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'out_for_delivery') && (
                         <button
-                          className="flex items-center justify-center gap-2 flex-1 bg-red-600 text-white font-semibold py-3 px-6 rounded-xl hover:bg-red-700 transition-all shadow-lg hover:shadow-xl"
+                          onClick={() => setShowChat(order.id)}
+                          className="flex items-center justify-center gap-2 flex-1 bg-blue-600 text-white font-semibold py-3 px-6 rounded-xl hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl"
                         >
-                          <XCircle size={20} />
-                          Cancelar Pedido
+                          <MessageCircle size={20} />
+                          Chat con Repartidor
                         </button>
                       )}
+                      
+                      {/* Botones de Acción */}
+                      <div className="flex gap-3">
+                        {/* Botón de Cancelar - Solo para pedidos pendientes */}
+                        {order.status === 'pending' && (
+                          <button
+                            onClick={() => handleCancelOrder(order.id)}
+                            disabled={cancellingOrderId === order.id}
+                            className={`flex items-center justify-center gap-2 flex-1 font-semibold py-3 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl ${
+                              cancellingOrderId === order.id
+                                ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                                : 'bg-red-600 text-white hover:bg-red-700'
+                            }`}
+                          >
+                            {cancellingOrderId === order.id ? (
+                              <>
+                                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                Cancelando...
+                              </>
+                            ) : (
+                              <>
+                                <XCircle size={20} />
+                                Cancelar
+                              </>
+                            )}
+                          </button>
+                        )}
+
+                        {/* Botón de Eliminar - Para todos los pedidos */}
+                        <button
+                          onClick={() => handleDeleteOrder(order.id)}
+                          disabled={cancellingOrderId === order.id}
+                          className={`flex items-center justify-center gap-2 font-semibold py-3 px-4 rounded-xl transition-all shadow-lg hover:shadow-xl ${
+                            cancellingOrderId === order.id
+                              ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                              : 'bg-gray-600 text-white hover:bg-gray-700'
+                          }`}
+                        >
+                          {cancellingOrderId === order.id ? (
+                            <>
+                              <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                            </>
+                          ) : (
+                            <>
+                              <XCircle size={18} />
+                              Eliminar
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -255,6 +436,69 @@ export default function PedidosPage() {
           )}
         </div>
       </div>
+      
+      {/* Componente de confirmación */}
+      <ConfirmDialogComponent />
+      
+      {/* Componente de toasts */}
+      {/* Modal de Calificación */}
+      {showCalificacion && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Calificar Repartidor
+                </h3>
+                <button
+                  onClick={() => setShowCalificacion(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XCircle size={24} />
+                </button>
+              </div>
+              
+              <SistemaCalificaciones
+                pedidoId={showCalificacion}
+                tipo="cliente_a_repartidor"
+                onCalificacionEnviada={() => {
+                  setShowCalificacion(null)
+                  showToast('✅ Calificación enviada exitosamente', 'success')
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Chat */}
+      {showChat && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Chat con Repartidor
+                </h3>
+                <button
+                  onClick={() => setShowChat(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XCircle size={24} />
+                </button>
+              </div>
+              
+              <ChatComponent
+                conversacionId={showChat}
+                pedidoId={showChat}
+                className="h-96"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ToastContainer />
     </ProtectedRoute>
   )
 }

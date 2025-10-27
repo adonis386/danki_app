@@ -155,7 +155,15 @@ class TrackingService {
         .limit(1)
         .single()
 
-      if (error) throw error
+      if (error) {
+        // Si no hay ubicaciones registradas, no es un error crítico
+        if (error.code === 'PGRST116') {
+          console.log(`No hay ubicaciones registradas para repartidor ${repartidorId}`)
+          return null
+        }
+        throw error
+      }
+      
       return data as UbicacionRepartidor
     } catch (error) {
       console.error('Error al obtener última ubicación:', error)
@@ -189,16 +197,30 @@ class TrackingService {
 
   async createAsignacion(asignacionData: CreateAsignacionData) {
     try {
+      console.log('🚀 [TrackingService] Creando asignación:', asignacionData)
+      
       const { data, error } = await this.supabase
         .from('asignaciones_repartidor')
         .insert(asignacionData)
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ [TrackingService] Error de Supabase:', error)
+        throw error
+      }
+      
+      console.log('✅ [TrackingService] Asignación creada exitosamente:', data)
       return data as AsignacionRepartidor
     } catch (error) {
-      console.error('Error al crear asignación:', error)
+      console.error('❌ [TrackingService] Error al crear asignación:', error)
+      
+      // Si es un error de tabla no encontrada, intentar crear la tabla
+      if (error && typeof error === 'object' && 'code' in error && error.code === '42P01') {
+        console.warn('⚠️ [TrackingService] Tabla asignaciones_repartidor no existe, ejecuta el script SQL')
+        throw new Error('Tabla asignaciones_repartidor no existe. Ejecuta database/asignaciones_repartidor_setup.sql')
+      }
+      
       throw error
     }
   }

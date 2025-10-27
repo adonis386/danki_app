@@ -89,6 +89,14 @@ export interface CreateUbicacionData {
   precision_metros?: number
 }
 
+export interface ETACalculation {
+  tiempo_estimado_minutos: number
+  distancia_km: number
+  tiempo_trafico_minutos?: number
+  ruta_optimizada?: boolean
+  ultima_actualizacion: string
+}
+
 export interface Coordenadas {
   lat: number
   lng: number
