@@ -64,7 +64,7 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
         </div>
 
         {/* Content */}
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col bg-gray-100 rounded-b-3xl">
           {cart.items.length === 0 ? (
             /* Empty Cart */
             <div className="flex-1 flex items-center justify-center p-6">

@@ -35,20 +35,87 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   // Cargar carrito desde localStorage al inicializar o cuando cambie el usuario
   useEffect(() => {
-    const storageKey = getCartStorageKey(user?.id || null)
-    const savedCart = localStorage.getItem(storageKey)
-    
-    if (savedCart) {
-      try {
-        const parsedCart = JSON.parse(savedCart)
-        setCart(parsedCart)
-      } catch (error) {
-        console.error('Error al cargar carrito desde localStorage:', error)
-        localStorage.removeItem(storageKey)
-        setCart(initialCart)
+    try {
+      const guestKey = getCartStorageKey(null)
+      const userKey = getCartStorageKey(user?.id || null)
+
+      const guestCartRaw = localStorage.getItem(guestKey)
+      const userCartRaw = localStorage.getItem(userKey)
+
+      const parseCart = (raw: string | null): Cart | null => {
+        if (!raw) return null
+        try {
+          const parsed = JSON.parse(raw)
+          const items: CartItem[] = Array.isArray(parsed?.items) ? parsed.items : []
+          // Recalcular siempre para evitar totales obsoletos
+          const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
+          const deliveryFee = subtotal > 0 ? 2.99 : 0
+          const tax = subtotal * 0.16
+          const total = subtotal + deliveryFee + tax
+          const itemCount = items.reduce((sum, i) => sum + i.quantity, 0)
+          return {
+            items,
+            subtotal: Math.round(subtotal * 100) / 100,
+            deliveryFee: Math.round(deliveryFee * 100) / 100,
+            tax: Math.round(tax * 100) / 100,
+            total: Math.round(total * 100) / 100,
+            itemCount,
+          }
+        } catch {
+          return null
+        }
       }
-    } else {
-      // Si no hay carrito guardado para este usuario, inicializar carrito vacío
+
+      const guestCart = parseCart(guestCartRaw)
+      const userCart = parseCart(userCartRaw)
+
+      // Estrategia:
+      // - Si hay user logueado, preferir su carrito; si además hay guest, MERGE y migrar a userKey
+      // - Si no hay user, usar guest
+      const mergeItems = (a: CartItem[], b: CartItem[]): CartItem[] => {
+        const map = new Map<string, CartItem>()
+        const upsert = (it: CartItem) => {
+          const existing = map.get(it.product_id)
+          if (existing) {
+            map.set(it.product_id, {
+              ...existing,
+              quantity: existing.quantity + it.quantity,
+            })
+          } else {
+            map.set(it.product_id, { ...it })
+          }
+        }
+        a.forEach(upsert)
+        b.forEach(upsert)
+        return Array.from(map.values())
+      }
+
+      if (user?.id) {
+        const mergedItems = mergeItems(userCart?.items || [], guestCart?.items || [])
+        const subtotal = mergedItems.reduce((s, i) => s + i.price * i.quantity, 0)
+        const deliveryFee = subtotal > 0 ? 2.99 : 0
+        const tax = subtotal * 0.16
+        const total = subtotal + deliveryFee + tax
+        const itemCount = mergedItems.reduce((s, i) => s + i.quantity, 0)
+        const mergedCart: Cart = {
+          items: mergedItems,
+          subtotal: Math.round(subtotal * 100) / 100,
+          deliveryFee: Math.round(deliveryFee * 100) / 100,
+          tax: Math.round(tax * 100) / 100,
+          total: Math.round(total * 100) / 100,
+          itemCount,
+        }
+        setCart(mergedCart)
+        localStorage.setItem(userKey, JSON.stringify(mergedCart))
+        // limpiar guest para evitar duplicados en futuras sesiones
+        if (guestCart?.items?.length) {
+          localStorage.removeItem(guestKey)
+        }
+      } else {
+        setCart(guestCart || initialCart)
+      }
+    } catch (error) {
+      console.error('Error al cargar carrito desde localStorage:', error)
       setCart(initialCart)
     }
   }, [user?.id])

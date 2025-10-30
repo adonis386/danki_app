@@ -206,8 +206,14 @@ class TrackingService {
         .single()
 
       if (error) {
-        console.error('❌ [TrackingService] Error de Supabase:', error)
-        throw error
+        const enriched = {
+          message: (error as any)?.message,
+          details: (error as any)?.details,
+          hint: (error as any)?.hint,
+          code: (error as any)?.code,
+        }
+        console.error('❌ [TrackingService] Error de Supabase (asignaciones_repartidor.insert):', enriched)
+        throw new Error(enriched.message || JSON.stringify(enriched) || 'Error desconocido al crear asignación')
       }
       
       console.log('✅ [TrackingService] Asignación creada exitosamente:', data)
